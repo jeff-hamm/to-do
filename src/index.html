@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Todo System</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Flatpickr CSS for date picker -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+</head>
+<body>
+    <div id="app">
+        <div class="todo-container">
+            <div class="section">
+                <div class="header-with-sync">
+                    <h1>📝 Universal Todo System</h1>
+                </div>
+                <div id="progress-bar" style="background: #30363d; border-radius: 10px; height: 8px; margin: 12px 0;">
+                    <div id="progress-fill"
+                        style="background: #ff69b4; height: 100%; border-radius: 10px; width: 0%; transition: width 0.3s ease;">
+                    </div>
+                </div>
+            
+            <!-- Bottom controls bar -->
+            <div id="sync-status" class="sync-status">
+                <button id="add-task-btn" class="floating-add-btn">
+                    <span class="btn-text-full">+ Add New Task</span>
+                    <span class="btn-text-mobile">+</span>
+                </button>
+                <div id="progress-text" class="progress-text">Loading tasks...</div>
+                <a href="#" id="sheets-link" target="_blank" class="sheet-link" style="display: none;">📝 Edit in Google Sheets</a>
+                <div id="sync-status-text" class="sync-status-text" style="display: none;"></div>
+            </div>            <!-- Filter buttons -->
+            <div id="filter-buttons" class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">All Tasks</button>
+                <button class="filter-btn" data-filter="active">Active</button>
+                <button class="filter-btn" data-filter="completed">Completed</button>
+                <button class="filter-btn" data-filter="high-priority">High Priority</button>
+                <button class="filter-btn" data-filter="today">Due Today</button>
+                <button class="filter-btn" data-filter="overdue">Overdue</button>
+            </div>
+
+            
+            <!-- Tasks container -->
+            <div id="todo-list" class="tasks-container">
+                <div class="loading">Loading tasks...</div>
+            </div>
+            
+            <!-- Main loading screen -->
+            <div id="loading" class="loading" style="display: none;">
+                Loading tasks from data source...
+            </div>
+            
+            <!-- Error display -->
+            <div id="error-display" class="error" style="display: none;"></div>
+            
+            <!-- Offline notice -->
+            <div id="offline-notice" class="offline-notice" style="display: none;">
+                🔌 You're working offline. Changes will sync when connection is restored.
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add Task Modal -->
+    <div id="modal-backdrop" class="modal-backdrop" style="display: none;" onclick="todoApp.hideAddTaskForm()"></div>
+    <form id="add-task-form" class="add-task-form" style="display: none;">
+        <h3>➕ Add New Task</h3>
+        
+        <!-- Loading overlay for form submission -->
+        <div id="add-task-loading-overlay" class="add-task-loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <div class="spinner-text loading-text">Adding task...</div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="task-title">Task Title *</label>
+                <input type="text" id="task-title" name="title" required>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="task-description">Description</label>
+                <textarea id="task-description" name="notes" rows="3"></textarea>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="task-category">Category</label>
+                <select id="task-category" name="category">
+                    <option value="">Select Category</option>
+                    <option value="work">Work</option>
+                    <option value="personal">Personal</option>
+                    <option value="shopping">Shopping</option>
+                    <option value="health">Health</option>
+                    <option value="finance">Finance</option>
+                    <option value="home">Home</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="task-priority">Priority</label>
+                <select id="task-priority" name="priority">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="task-timeline">Timeline</label>
+                <select id="task-timeline" name="timeline">
+                    <option value="">No Timeline</option>
+                    <option value="today">Today</option>
+                    <option value="tomorrow">Tomorrow</option>
+                    <option value="this-week">This Week</option>
+                    <option value="next-week">Next Week</option>
+                    <option value="this-month">This Month</option>
+                    <option value="custom">Custom Date</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="task-assigned-to">Assigned To</label>
+                <select id="task-assigned-to" name="assignedTo">
+                    <option value="">Not Assigned</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="task-how">How (Instructions)</label>
+                <select id="task-how" name="how">
+                    <option value="">Select method...</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="task-who-can-help">Who Can Help</label>
+                <select id="task-who-can-help" name="whoCanHelp">
+                    <option value="">Select helper...</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </div>
+        
+        <!-- "Other" input fields (hidden by default) -->
+        <div class="form-row">
+            <div class="form-group">
+                <input type="text" id="task-timeline-other" name="timelineOther" placeholder="Enter custom timeline..." style="display: none;">
+            </div>
+            <div class="form-group">
+                <input type="text" id="task-category-other" name="categoryOther" placeholder="Enter custom category..." style="display: none;">
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <input type="text" id="task-how-other" name="howOther" placeholder="Enter custom method..." style="display: none;">
+            </div>
+            <div class="form-group">
+                <input type="text" id="task-who-can-help-other" name="whoCanHelpOther" placeholder="Enter helper name..." style="display: none;">
+            </div>
+        </div>
+        
+        <!-- Date picker section -->
+        <div class="form-row" id="date-picker-section" style="display: none;">
+            <div class="form-group">
+                <label for="task-due-date">Due Date</label>
+                <div class="date-input-container">
+                    <input type="text" id="task-due-date" name="dueDate" readonly>
+                    <div class="date-type-toggle">
+                        <button type="button" class="date-toggle-btn active" data-mode="single">Single Date</button>
+                        <button type="button" class="date-toggle-btn" data-mode="range">Date Range</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Audio file section -->
+        <div class="form-row">
+            <div class="form-group">
+                <label for="task-audio-file">Audio File 🎵</label>
+                <div class="audio-upload-container">
+                    <input type="file" id="task-audio-file" name="audioFile" accept="audio/*" style="display: none;">
+                    <div class="audio-upload-display">
+                        <button type="button" class="audio-upload-btn" onclick="document.getElementById('task-audio-file').click()">
+                            📁 Choose Audio File
+                        </button>
+                        <span class="audio-filename">No file selected</span>
+                    </div>
+                    <div class="audio-drive-link">
+                        <a href="#" id="drive-folder-link" target="_blank" class="drive-folder-link" style="display: none;">
+                            📂 Open Google Drive Folder
+                        </a>
+                        <small class="audio-help-text">Upload your audio file to this shared folder, then paste the link below</small>
+                    </div>
+                    <input type="url" id="task-audio-url" name="audioUrl" placeholder="Paste Google Drive audio file link here..." class="audio-url-input">
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="button" class="btn-secondary" onclick="todoApp.hideAddTaskForm()">Cancel</button>
+            <button type="submit" class="btn-primary">Add Task</button>
+        </div>
+    </form>
+    
+    <!-- Include Flatpickr for date selection -->
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    
+    <!-- Configuration (customize this file) -->
+    <script src="config.js"></script>
+    
+    <!-- Core todo app -->
+    <script src="app.js"></script>
+    
+    <!-- Initialize the app -->
+    <script>
+        // Initialize the todo app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            console.log('TODO_CONFIG exists:', typeof TODO_CONFIG !== 'undefined');
+            console.log('GoogleSheetsChecklist exists:', typeof GoogleSheetsChecklist !== 'undefined');
+            
+            if (typeof TODO_CONFIG === 'undefined') {
+                console.error('TODO_CONFIG is undefined - config.js may have failed to load');
+                return;
+            }
+            
+            if (typeof GoogleSheetsChecklist === 'undefined') {
+                console.error('GoogleSheetsChecklist is undefined - app.js may have failed to load');
+                return;
+            }
+            
+            // Function to set up dynamic links
+            function setupDynamicLinks() {
+                const config = window.TODO_CONFIG;
+                
+                // Set up Google Sheets link
+                const sheetsLink = document.getElementById('sheets-link');
+                if (config.googleSheets && config.googleSheets.enabled && config.googleSheets.spreadsheetId && config.googleSheets.spreadsheetId !== 'YOUR_GOOGLE_SHEETS_ID_HERE') {
+                    sheetsLink.href = `https://docs.google.com/spreadsheets/d/${config.googleSheets.spreadsheetId}/edit?usp=sharing`;
+                    sheetsLink.style.display = '';
+                }
+                
+                // Set up Google Drive folder link
+                const driveFolderLink = document.getElementById('drive-folder-link');
+                if (config.data && config.data.audioFile && config.data.audioFile.options && config.data.audioFile.options.driveFolder && config.data.audioFile.options.driveFolder !== 'YOUR_GOOGLE_DRIVE_FOLDER_URL_HERE') {
+                    driveFolderLink.href = config.data.audioFile.options.driveFolder;
+                    driveFolderLink.style.display = '';
+                }
+            }
+            
+            // Set up links initially
+            setupDynamicLinks();
+            
+            // Also set up links when config is ready (in case local config loads after)
+            window.addEventListener('configReady', setupDynamicLinks);
+            
+            console.log('TODO_CONFIG:', TODO_CONFIG);
+            try {
+                window.todoApp = new GoogleSheetsChecklist(TODO_CONFIG);
+                console.log('TodoApp created:', window.todoApp);
+                todoApp.init();
+                console.log('TodoApp initialized');
+            } catch (error) {
+                console.error('Error initializing todo app:', error);
+                console.error('Error stack:', error.stack);
+            }
+        });
+    </script>
+</body>
+</html>
