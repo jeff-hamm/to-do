@@ -79,6 +79,7 @@ class GoogleSheetsChecklist {
         this.refreshInterval = finalConfig.dataSource?.syncInterval || 60000;
         this.maxRetries = 3;
         this.localStorageKey = finalConfig.dataSource?.localStorageKey || 'todo-system-tasks';
+        this.enableLocalStorage = finalConfig.dataSource?.enableLocalStorage !== false; // Default to true
         this.theme = finalConfig.ui?.theme?.colorPrimary || '#ff69b4';
         this.flatpickrConfig = finalConfig.ui?.flatpickr || {};
 
@@ -87,8 +88,9 @@ class GoogleSheetsChecklist {
         this.lastSync = null;
         this.lastModified = null;
         this.isOnline = navigator.onLine;
-        this.useAppsScript = this.appsScriptUrl && this.appsScriptUrl !== 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
-        this.useGoogleSheets = this.sheetId && this.sheetId !== null;
+        // Temporarily use CSV instead of Apps Script to test around browser extension blocking
+        this.useAppsScript = false; // this.appsScriptUrl && this.appsScriptUrl !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE';
+        // Keep the enabled check for useGoogleSheets (don't overwrite with just sheetId check)
         this.retryCount = 0;
         this.isInitialLoad = true;
         this.currentFilter = 'all';
@@ -97,7 +99,7 @@ class GoogleSheetsChecklist {
         this.showCompleted = false;
         this.fieldConfigCache = new Map();
         this.allFieldConfigsCache = null;
-        this.init();
+        // Don't call init() here - let the HTML call it explicitly after config is ready
     }
 
     getSavedFilter() {
@@ -118,45 +120,65 @@ class GoogleSheetsChecklist {
     }
 
     init() {
-        // Event listeners for add task form
-        const addItemBtn = document.getElementById('add-task-btn');
-        const taskForm = document.getElementById('add-task-form');
+        console.log('🚀 TodoApp initialization started...');
+        try {
+            // Event listeners for add task form
+            const addItemBtn = document.getElementById('add-task-btn');
+            const taskForm = document.getElementById('add-task-form');
+            
+            console.log('🔍 Add task button found:', !!addItemBtn);
+            console.log('🔍 Task form found:', !!taskForm);
 
-        if (addItemBtn) addItemBtn.addEventListener('click', () => this.toggleAddTaskForm());
-        if (taskForm) taskForm.addEventListener('submit', (e) => this.handleAddTask(e));
+            if (addItemBtn) addItemBtn.addEventListener('click', () => this.toggleAddTaskForm());
+            if (taskForm) taskForm.addEventListener('submit', (e) => this.handleAddTask(e));
 
-        // Handle "Other" option dropdowns
-        this.setupOtherDropdowns();
+            // Handle "Other" option dropdowns
+            this.setupOtherDropdowns();
+            console.log('✅ Other dropdowns set up');
 
-        // Initialize date picker if flatpickr is available
-        if (typeof flatpickr !== 'undefined') {
-            this.initializeDatePicker();
-        }
-
-        // Initialize audio field handlers
-        this.initializeAudioField();
-
-        // Auto-refresh if Google Sheets is enabled
-        if (this.useGoogleSheets) {
-            setInterval(() => this.loadFromSheet(), this.refreshInterval);
-        }
-
-        // Network status monitoring
-        window.addEventListener('online', () => {
-            this.isOnline = true;
-            this.hideOfflineNotice();
-            if (this.useGoogleSheets) {
-                this.loadFromSheet();
+            // Initialize date picker if flatpickr is available
+            if (typeof flatpickr !== 'undefined') {
+                this.initializeDatePicker();
+                console.log('✅ Date picker initialized');
             }
-        });
 
-        window.addEventListener('offline', () => {
-            this.isOnline = false;
-            this.showOfflineNotice();
-        });
+            // Initialize audio field handlers
+            this.initializeAudioField();
+            console.log('✅ Audio field initialized');
 
-        // Initial load
-        this.loadData();
+            // Auto-refresh if Google Sheets is enabled
+            if (this.useGoogleSheets) {
+                setInterval(() => this.loadFromSheet(), this.refreshInterval);
+                console.log('✅ Auto-refresh enabled');
+            }
+
+            // Network status monitoring
+            window.addEventListener('online', () => {
+                this.isOnline = true;
+                this.hideOfflineNotice();
+                if (this.useGoogleSheets) {
+                    this.loadFromSheet();
+                }
+            });
+
+            window.addEventListener('offline', () => {
+                this.isOnline = false;
+                this.showOfflineNotice();
+            });
+            console.log('✅ Network monitoring set up');
+
+            // Initial load
+            this.loadData();
+            console.log('✅ Data loading initiated');
+            
+            // Initialize generic multiselect fields
+            this.initializeMultiSelectFields();
+            console.log('✅ Multiselect fields initialized');
+            
+            console.log('🎉 TodoApp initialization completed successfully!');
+        } catch (error) {
+            console.error('💥 Error during TodoApp initialization:', error);
+        }
     }
 
     setupOtherDropdowns() {
@@ -206,6 +228,9 @@ class GoogleSheetsChecklist {
         dateModeFields.forEach(({ fieldName, fieldId, config }) => {
             this.setupDateModeToggles(fieldName, fieldId, config);
         });
+
+    // Initialize multiselect fields (generic)
+    this.initializeMultiSelectFields();
     }
 
     setupDateModeToggles(fieldName, fieldId, fieldConfig) {
@@ -253,12 +278,100 @@ class GoogleSheetsChecklist {
         }
     }
 
-    async loadData() {
-        if (this.useGoogleSheets && this.isOnline) {
-            await this.loadFromSheet();
-        } else {
-            this.loadFromLocalStorage();
+    // Generic multiselect initialization (form side)
+    initializeMultiSelectFields() {
+        try {
+            const multiselectFields = Object.entries(this.getFieldConfigs()).filter(([_, cfg]) => cfg.type === 'multiselect');
+            multiselectFields.forEach(([fieldName, cfg]) => {
+                const containerId = `${toKebabCase(fieldName)}-container`;
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                // Delegate change events
+                container.addEventListener('change', (e) => {
+                    if (e.target.classList.contains(`multi-select-${fieldName}`)) {
+                        this.handleGenericMultiSelectChange(fieldName, e.target);
+                        const allSelects = container.querySelectorAll(`.multi-select-${fieldName}`);
+                        const lastSelect = allSelects[allSelects.length - 1];
+                        if (e.target === lastSelect && e.target.value) {
+                            this.addEmptyGenericMultiSelect(fieldName);
+                        }
+                    }
+                });
+                this.populateGenericMultiSelect(fieldName);
+            });
+        } catch (err) {
+            console.error('❌ Error initializing multiselect fields:', err);
         }
+    }
+
+    /**
+     * Dynamically append a new empty helper dropdown (legacy behavior: once you choose a helper,
+     * a new blank appears so you can keep adding). Prevents unbounded duplicates of trailing blanks.
+     */
+    addEmptyGenericMultiSelect(fieldName) {
+        const container = document.getElementById(`${toKebabCase(fieldName)}-container`);
+        if (!container) return;
+        const selects = container.querySelectorAll(`.multi-select-${fieldName}`);
+        const last = selects[selects.length - 1];
+        if (last && (last.value === '' || last.value === 'Other')) return;
+    const select = document.createElement('select');
+    select.className = `multi-select-${fieldName} editable-dropdown helper-dropdown editing-dropdown`;
+        select.innerHTML = `<option value=""></option><option value="Other">Other</option>`;
+        container.appendChild(select);
+        this.populateGenericMultiSelect(fieldName);
+    }
+
+    // Helper methods removed - using simple always-visible dropdowns instead
+
+    handleGenericMultiSelectChange(fieldName, select) {
+        try {
+            const otherId = `task-${toKebabCase(fieldName)}-other`;
+            if (select.value === 'Other') {
+                this.handleOtherOption({ target: select }, otherId);
+            }
+        } catch (error) {
+            console.error('❌ Error handling multiselect change:', error);
+        }
+    }
+
+    // Method to get all selected helpers as comma-separated string
+    getSelectedMultiValues(fieldName) {
+        const container = document.getElementById(`${toKebabCase(fieldName)}-container`);
+        if (!container) return '';
+        const selects = container.querySelectorAll(`.multi-select-${fieldName}`);
+        const values = Array.from(selects)
+            .map(select => select.value)
+            .filter(value => value && value !== '' && value !== 'Other');
+        const otherInput = document.getElementById(`task-${toKebabCase(fieldName)}-other`);
+        if (otherInput && otherInput.style.display !== 'none' && otherInput.value.trim()) {
+            values.push(otherInput.value.trim());
+        }
+        const unique = [];
+        values.forEach(v => { if (!unique.includes(v)) unique.push(v); });
+        return unique.join(', ');
+    }
+
+    async loadData() {
+        console.log('🔄 loadData() called');
+        console.log('🔧 useGoogleSheets:', this.useGoogleSheets);
+        console.log('🌐 isOnline:', this.isOnline);
+        console.log('� enableLocalStorage:', this.enableLocalStorage);
+        console.log('�🗝️ sheetId:', this.sheetId);
+        console.log('📱 appsScriptUrl:', this.appsScriptUrl ? 'configured' : 'not configured');
+        
+        if (!this.useGoogleSheets) {
+            console.error('❌ Google Sheets is disabled - local storage fallback disabled by user request');
+            this.showError('Google Sheets must be configured to use this app. Local storage is disabled.');
+            return;
+        }
+        
+        if (!this.isOnline) {
+            console.error('❌ Offline - local storage fallback disabled by user request');
+            this.showError('You must be online to use this app. Local storage fallback is disabled.');
+            return;
+        }
+                console.log('📊 Loading from Google Sheets only (local storage disabled)...');
+        await this.loadFromSheet();
     }
 
     async loadFromSheet() {
@@ -284,11 +397,23 @@ class GoogleSheetsChecklist {
             this.updateSyncStatus('✅ Synced');
 
         } catch (error) {
-            console.error('Error loading from Google Sheets:', error);
+            console.error('❌ Error loading from Google Sheets details:', {
+                message: error.message,
+                name: error.name,
+                stack: error.stack
+            });
+            console.log('🔧 Config details:', {
+                useGoogleSheets: this.useGoogleSheets,
+                useAppsScript: this.useAppsScript,
+                appsScriptUrl: this.appsScriptUrl ? 'configured' : 'not configured',
+                sheetId: this.sheetId ? 'configured' : 'not configured'
+            });
+            
             this.showError(`Failed to sync with Google Sheets: ${error.message}`);
             this.showOfflineNotice();
 
             if (!this.loadCachedData()) {
+                console.log('📦 Loading sample data as fallback');
                 this.loadSampleData();
             }
         } finally {
@@ -320,6 +445,11 @@ class GoogleSheetsChecklist {
     }
 
     saveToLocalStorage() {
+        if (!this.enableLocalStorage) {
+            console.log('💾 Local storage saving disabled via config - using Google Sheets only');
+            return;
+        }
+        
         try {
             localStorage.setItem(this.localStorageKey, JSON.stringify(this.tasks));
         } catch (error) {
@@ -328,25 +458,70 @@ class GoogleSheetsChecklist {
     }
 
     async loadFromAppsScript() {
+        console.log('🔗 Loading from Apps Script:', this.appsScriptUrl);
+        
+        if (!this.appsScriptUrl) {
+            throw new Error('Apps Script URL not configured');
+        }
+        
         const url = `${this.appsScriptUrl}?action=getTasks&t=${Date.now()}`;
-        const response = await fetch(url, {
-            method: 'GET',
-            mode: 'cors'
-        });
+        console.log('📡 Fetching from URL:', url);
+        
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                mode: 'cors',
+                headers: {
+                    'Accept': 'application/json',
+                }
+            });
 
-        if (!response.ok) {
-            throw new Error(`Apps Script error: ${response.status}`);
+            console.log('📥 Apps Script response status:', response.status);
+            console.log('📥 Apps Script response headers:', Object.fromEntries(response.headers.entries()));
+            
+            if (!response.ok) {
+                // Get response text for more details
+                const responseText = await response.text();
+                console.log('📄 Apps Script response body:', responseText);
+                throw new Error(`Apps Script HTTP error: ${response.status} ${response.statusText}. Response: ${responseText.substring(0, 200)}`);
+            }
+
+            const result = await response.json();
+            console.log('📋 Apps Script result:', result);
+
+            if (!result.success) {
+                throw new Error(result.data?.error || result.error || 'Apps Script returned error');
+            }
+
+            this.tasks = result.data?.tasks || [];
+            this.lastModified = result.data?.lastModified;
+            console.log(`✅ Loaded ${this.tasks.length} tasks from Apps Script`);
+            this.saveToCache();
+            
+        } catch (fetchError) {
+            console.error('🚫 Apps Script fetch error details:', {
+                message: fetchError.message,
+                name: fetchError.name,
+                stack: fetchError.stack
+            });
+            
+            // If it's a CORS error, try alternative approach
+            if (fetchError.message.includes('CORS') || fetchError.message.includes('Network')) {
+                console.log('🔄 Trying alternative fetch approach...');
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        mode: 'no-cors'
+                    });
+                    console.log('📥 No-CORS response status:', response.status);
+                } catch (altError) {
+                    console.error('🚫 Alternative fetch also failed:', altError.message);
+                }
+            }
+            
+            // Re-throw with more context
+            throw new Error(`Apps Script connection failed: ${fetchError.message}`);
         }
-
-        const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.data?.error || 'Apps Script returned error');
-        }
-
-        this.tasks = result.data.tasks || [];
-        this.lastModified = result.data.lastModified;
-        this.saveToCache();
     }
 
     async loadFromCSV() {
@@ -412,7 +587,7 @@ class GoogleSheetsChecklist {
                         how: columnMap.how >= 0 ? columns[columnMap.how]?.trim() || '' : '',
                         notes: columnMap.notes >= 0 ? columns[columnMap.notes]?.trim() || '' : '',
                         whoCanHelp: columnMap.whoCanHelp >= 0 ? 
-                            this.formatWhoCanHelp(this.parseWhoCanHelp(columns[columnMap.whoCanHelp]?.trim() || '')) : '',
+                            this.formatMultiValueField(this.parseMultiValueField(columns[columnMap.whoCanHelp]?.trim() || '')) : '',
                         date: columnMap.date >= 0 ? columns[columnMap.date]?.trim() || '' : '',
                         source: 'google-sheets',
                         rowIndex: i + 1
@@ -426,15 +601,15 @@ class GoogleSheetsChecklist {
     }
     
 
-    // Helper functions for multi-value fields
-    parseWhoCanHelp(whoCanHelpStr) {
-        if (!whoCanHelpStr || !whoCanHelpStr.trim()) return [];
-        return whoCanHelpStr.split(/[,\s]+/).filter(value => value.trim() !== '').map(value => value.trim());
+    // Generic helper functions for multi-value (comma/space/semicolon separated) fields
+    parseMultiValueField(rawStr) {
+        if (!rawStr || !rawStr.trim()) return [];
+        return rawStr.split(/[;,\s]+/).filter(v => v.trim() !== '').map(v => v.trim());
     }
 
-    formatWhoCanHelp(valuesArray) {
+    formatMultiValueField(valuesArray) {
         if (!valuesArray || valuesArray.length === 0) return '';
-        return valuesArray.filter(value => value && value.trim() !== '').join(', ');
+        return valuesArray.filter(v => v && v.trim() !== '').join(', ');
     }
 
     parseCSVLine(line) {
@@ -582,7 +757,7 @@ class GoogleSheetsChecklist {
                     method: 'GET',
                     mode: 'cors'
                 });
-+
+
                 if (response.ok) {
                     const result = await response.json();
                     if (result.success) {
@@ -803,6 +978,8 @@ class GoogleSheetsChecklist {
         todoList.innerHTML = html;
         this.applyFilter(this.currentFilter, this.currentFilterField, this.currentFilterValue, tasksToRender);
         this.populateFormDropdowns(tasksToRender);
+        // Initialize dynamic multi-helper selects inside each task detail (legacy behavior)
+        try { this.initializeDetailMultiSelects(tasksToRender); } catch(e){ console.warn('Failed initializing detail multiselects:', e); }
     }
 
 
@@ -829,6 +1006,91 @@ class GoogleSheetsChecklist {
         }
         return 0;
     }
+
+    // Generic detail multiselect initializer (replaces whoCanHelp-specific version)
+    initializeDetailMultiSelects(tasks) {
+        const multiselectFields = Object.entries(this.getFieldConfigs()).filter(([_, cfg]) => cfg.type === 'multiselect');
+        multiselectFields.forEach(([fieldName, cfg]) => {
+            // Collect unique values across tasks for this field
+            const valueSet = new Set();
+            tasks.forEach(t => (t[fieldName]||'').split(/[,;]+/).map(s=>s.trim()).filter(Boolean).forEach(v=>valueSet.add(v)));
+            const options = Array.from(valueSet).sort((a,b)=>a.localeCompare(b));
+            // Find detail items with this field
+            const detailSelectors = document.querySelectorAll(`.todo-item .detail-item .editable-text[data-field="${fieldName}"]`);
+            detailSelectors.forEach(valueSpan => {
+                const container = valueSpan.closest('.detail-item');
+                if (!container) return;
+                const taskId = valueSpan.getAttribute('data-task-id');
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return;
+                const dynamicId = `detail-${toKebabCase(fieldName)}-${taskId}`;
+                let dynamicWrapper = container.querySelector(`#${dynamicId}`);
+                if (!dynamicWrapper) {
+                    dynamicWrapper = document.createElement('div');
+                    dynamicWrapper.id = dynamicId;
+                    dynamicWrapper.className = 'who-can-help-dynamic-container'; // reuse styling
+                    valueSpan.style.display = 'none';
+                    container.appendChild(dynamicWrapper);
+                } else { dynamicWrapper.innerHTML=''; }
+                const existingValues = (task[fieldName]||'').split(/[,;]+/).map(s=>s.trim()).filter(Boolean);
+                const buildSelect = (selectedValue='') => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'who-helper-row';
+                    const select = document.createElement('select');
+                    select.className = `detail-multiselect-select multi-select-${fieldName} editable-dropdown helper-dropdown editing-dropdown`;
+                    const blankOpt = document.createElement('option'); blankOpt.value=''; blankOpt.textContent='';
+                    select.appendChild(blankOpt);
+                    options.forEach(o => { const opt = document.createElement('option'); opt.value=o; opt.textContent=o; if(o===selectedValue) opt.selected=true; select.appendChild(opt); });
+                    select.addEventListener('change', ()=> {
+                        const all = Array.from(dynamicWrapper.querySelectorAll('select.multi-select-'+fieldName));
+                        const last = all[all.length-1];
+                        // Auto-append a new blank if last got a value
+                        if (last && last.value && all.every(s => s !== last || s.value)) {
+                            dynamicWrapper.appendChild(buildSelect(''));
+                        }
+                        // Persist changes
+                        this.persistDetailMultiSelectChange(taskId, fieldName, dynamicWrapper);
+                        // Remove any intermediate blank selects (keep only trailing blank)
+                        const selects = Array.from(dynamicWrapper.querySelectorAll('select.multi-select-'+fieldName));
+                        selects.forEach((s, idx) => {
+                            if (!s.value && idx < selects.length - 1) {
+                                const row = s.closest('.who-helper-row');
+                                if (row) row.remove();
+                            }
+                        });
+                    });
+                    wrapper.appendChild(select);
+                    return wrapper;
+                };
+                existingValues.forEach(v=>dynamicWrapper.appendChild(buildSelect(v)));
+                dynamicWrapper.appendChild(buildSelect(''));
+            });
+        });
+    }
+
+    persistDetailMultiSelectChange(taskId, fieldName, wrapperEl) {
+        const selects = Array.from(wrapperEl.querySelectorAll(`select.multi-select-${fieldName}`));
+        const values = selects.map(s=>s.value.trim()).filter(Boolean);
+        const unique=[]; values.forEach(v=>{ if(!unique.includes(v)) unique.push(v); });
+        const joined = unique.join(', ');
+        const task = this.tasks.find(t=>t.id===taskId);
+        if(task){ task[fieldName]=joined; this.debouncedGenericMultiPersist(taskId, fieldName, joined); }
+    }
+
+    // Debounce persistence for multiselect fields (per task+field)
+    debouncedGenericMultiPersist = (() => {
+        const timers = new Map();
+        const delay = 600;
+        return (taskId, fieldName, value) => {
+            const key = `${taskId}:${fieldName}`;
+            if (timers.has(key)) clearTimeout(timers.get(key));
+            const t = setTimeout(()=>{
+                this.updateTaskInSheet(taskId, fieldName, value);
+                timers.delete(key);
+            }, delay);
+            timers.set(key, t);
+        };
+    })();
 
     populateFormDropdowns(tasks = null) {
         // Use provided tasks or fall back to class field
@@ -876,6 +1138,14 @@ class GoogleSheetsChecklist {
     }
 
     populateDropdown(elementId, values, config = {}) {
+        // Special handling: generic multiselect fields use container-based dynamic selects
+        const fieldNameFromId = elementId.replace(/^task-/, '').replace(/-([a-z])/g, (_,c)=>c.toUpperCase());
+        const fieldCfg = this.getFieldConfig(fieldNameFromId);
+        if (fieldCfg && fieldCfg.type === 'multiselect') {
+            this.populateGenericMultiSelect(fieldNameFromId, values, config);
+            return;
+        }
+        
         const select = document.getElementById(elementId);
         if (!select) return;
 
@@ -908,6 +1178,40 @@ class GoogleSheetsChecklist {
 
         // Restore selection
         select.value = currentValue;
+    }
+
+    populateGenericMultiSelect(fieldName, values=null, config={}) {
+        const container = document.getElementById(`${toKebabCase(fieldName)}-container`);
+        if (!container) return;
+        if (!values) {
+            const valSet = new Set();
+            (this.tasks||[]).forEach(task => {
+                const raw = task[fieldName];
+                if (!raw) return;
+                raw.split(/[;,]/).map(v=>v.trim()).filter(v=>v).forEach(v=>valSet.add(v));
+            });
+            values = Array.from(valSet).sort((a,b)=>a.localeCompare(b));
+        }
+        const selects = container.querySelectorAll(`.multi-select-${fieldName}`);
+        selects.forEach(select => {
+            const currentValue = select.value;
+            Array.from(select.options).forEach(opt => {
+                if (opt.value && opt.value !== 'Other' && !values.includes(opt.value)) {
+                    // allow removal of values not in current list? keep for now
+                }
+            });
+            const otherOption = select.querySelector('option[value="Other"]');
+            values.forEach(val => {
+                if (Array.from(select.options).some(o => o.value === val)) return;
+                const opt = document.createElement('option');
+                opt.value = val; opt.textContent = val;
+                if (otherOption) select.insertBefore(opt, otherOption); else select.appendChild(opt);
+            });
+            if (currentValue) select.value = currentValue;
+        });
+        const currentSelects = container.querySelectorAll(`.multi-select-${fieldName}`);
+        const last = currentSelects[currentSelects.length-1];
+        if (last && last.value) this.addEmptyGenericMultiSelect(fieldName);
     }
 
     getFilterValue(fieldName, fieldValue) {
@@ -1324,46 +1628,87 @@ class GoogleSheetsChecklist {
     }
     
     toggleAddTaskForm() {
-        const addTaskForm = document.getElementById('add-task-form');
-        if (addTaskForm.style.display === 'block') {
-            this.hideAddTaskForm();
-        } else {
-            this.showAddTaskModal();
+        console.log('🔄 Toggle add task form called');
+        try {
+            const addTaskForm = document.getElementById('add-task-form');
+            console.log('🔍 Add task form element found:', !!addTaskForm);
+            
+            if (!addTaskForm) {
+                console.error('❌ Add task form not found!');
+                return;
+            }
+            
+            if (addTaskForm.style.display === 'block') {
+                console.log('📤 Hiding form');
+                this.hideAddTaskForm();
+            } else {
+                console.log('📥 Showing modal');
+                this.showAddTaskModal();
+            }
+        } catch (error) {
+            console.error('💥 Error in toggleAddTaskForm:', error);
         }
     }
 
     showAddTaskModal() {
-        let backdrop = document.getElementById('modal-backdrop');
-        if (!backdrop) {
-            backdrop = document.createElement('div');
-            backdrop.id = 'modal-backdrop';
-            backdrop.className = 'modal-backdrop';
-            backdrop.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.7);
-                z-index: 1000;
-                display: none;
-            `;
-            document.body.appendChild(backdrop);
+        console.log('🎭 showAddTaskModal called');
+        try {
+            let backdrop = document.getElementById('modal-backdrop');
+            console.log('🔍 Backdrop found:', !!backdrop);
+            
+            if (!backdrop) {
+                console.log('🆕 Creating new backdrop');
+                backdrop = document.createElement('div');
+                backdrop.id = 'modal-backdrop';
+                backdrop.className = 'modal-backdrop';
+                backdrop.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.7);
+                    z-index: 1000;
+                    display: none;
+                `;
+                document.body.appendChild(backdrop);
+            } else {
+                console.log('🔄 Using existing backdrop');
+            }
+            
+            console.log('👁️ Setting backdrop display to block and adding show class');
+            backdrop.style.display = 'block';
+            backdrop.classList.add('show');
+            console.log('📊 Backdrop display after setting:', backdrop.style.display);
+            console.log('📊 Backdrop has show class:', backdrop.classList.contains('show'));
+
+            const addTaskForm = document.getElementById('add-task-form');
+            console.log('🔍 Form found:', !!addTaskForm);
+            
+            this.populateFormDropdowns();
+            console.log('✅ Form dropdowns populated');
+            
+            addTaskForm.style.display = 'block';
+            addTaskForm.classList.add('show');
+            console.log('📊 Form display after setting:', addTaskForm.style.display);
+            console.log('📊 Form has show class:', addTaskForm.classList.contains('show'));
+
+            const taskPriority = document.getElementById('task-priority');
+            if (taskPriority) taskPriority.value = 'medium';
+
+            backdrop.addEventListener('click', () => this.hideAddTaskForm());
+            addTaskForm.addEventListener('click', (e) => e.stopPropagation());
+
+            const taskTitle = document.getElementById('task-title');
+            if (taskTitle) {
+                taskTitle.focus();
+                console.log('✅ Focus set on task title');
+            }
+            
+            console.log('🎉 Modal should now be visible');
+        } catch (error) {
+            console.error('💥 Error in showAddTaskModal:', error);
         }
-        backdrop.style.display = 'block';
-
-        const addTaskForm = document.getElementById('add-task-form');
-        this.populateFormDropdowns();
-        addTaskForm.style.display = 'block';
-
-        const taskPriority = document.getElementById('task-priority');
-        if (taskPriority) taskPriority.value = 'medium';
-
-        backdrop.addEventListener('click', () => this.hideAddTaskForm());
-        addTaskForm.addEventListener('click', (e) => e.stopPropagation());
-
-        const taskTitle = document.getElementById('task-title');
-        if (taskTitle) taskTitle.focus();
     }
 
     hideAddTaskForm() {
@@ -1371,8 +1716,14 @@ class GoogleSheetsChecklist {
         const backdrop = document.getElementById('modal-backdrop');
         const form = document.getElementById('new-task-form');
 
-        if (addTaskForm) addTaskForm.style.display = 'none';
-        if (backdrop) backdrop.style.display = 'none';
+        if (addTaskForm) {
+            addTaskForm.style.display = 'none';
+            addTaskForm.classList.remove('show');
+        }
+        if (backdrop) {
+            backdrop.style.display = 'none';
+            backdrop.classList.remove('show');
+        }
         if (form) form.reset();
 
         // Dynamically build list of "other" fields to hide from configuration
@@ -1428,7 +1779,7 @@ class GoogleSheetsChecklist {
         const taskData = {};
         
         // Process each configured field
-        Object.entries(dataFields).forEach(([fieldName, fieldConfig]) => {
+        for (const [fieldName, fieldConfig] of Object.entries(dataFields)) {
             let fieldValue = null;
             
             // Get the form field name (use configured formFieldName or derive from fieldName)
@@ -1492,9 +1843,14 @@ class GoogleSheetsChecklist {
                     break;
             }
             
+            // Generic handling for multiselect fields
+            if (fieldConfig.type === 'multiselect') {
+                fieldValue = this.getSelectedMultiValues(dataFieldName);
+            }
+            
             // Set the field value in taskData using the data field name
             taskData[dataFieldName] = fieldValue;
-        });
+        }
 
         if (!taskData.text) {
             this.showAddTaskLoading(false);

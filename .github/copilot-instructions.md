@@ -16,6 +16,7 @@
 - **Delete operations** - Batch all deletions: `Remove-Item "file1" -Force && Remove-Item "file2" -Force`
 - **Git operations** - Chain git commands: `git add . && git commit -m "message" && git push`
 - **System file cleanup** - Always remove .DS_Store, Thumbs.db, and other system files in batches
+- **Test Server**: Always start `test_server.py` using PowerShell background syntax: `& python test_server.py` or `Start-Process python -ArgumentList "test_server.py"` to avoid hanging the terminal
 
 
 ### Document Generation Requirements
@@ -53,10 +54,31 @@
 - [ ] Interactive features save/load properly
 - [ ] Cross-references between pages work
 - [ ] Print layouts are clean
+- [ ] No JavaScript console errors
+- [ ] Local server runs without issues
+- [ ] All forms and buttons function correctly
+
+**NEVER commit or push without testing locally first!**
 
 ## Quick Reference Commands
 
 ### Git Operations (Be Very Helpful - User is Not Git Expert)
+
+#### Testing Before Commits (CRITICAL)
+```bash
+# ALWAYS test changes before committing:
+# 1. Start local server to test
+python -m http.server 8000 --directory src
+
+# 2. Open http://localhost:8000 and verify:
+#    - Page loads without errors
+#    - All functionality works as expected
+#    - Console shows no JavaScript errors
+#    - Mobile layout looks correct
+#    - All forms and interactions work
+
+# 3. Only commit after successful testing
+```
 
 #### Basic Workflow
 ```bash

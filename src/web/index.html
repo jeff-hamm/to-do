@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal Todo System</title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- Using optimized stylesheet (original styles.css retained for reference) -->
+    <link rel="stylesheet" href="styles/optimized-styles.css">
     <!-- Flatpickr CSS for date picker -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
@@ -65,7 +66,7 @@
     <!-- Add Task Modal -->
     <div id="modal-backdrop" class="modal-backdrop" style="display: none;" onclick="todoApp.hideAddTaskForm()"></div>
     <form id="add-task-form" class="add-task-form" style="display: none;">
-        <h3>➕ Add New Task</h3>
+        <h3>✚ Add New Task</h3>
         
         <!-- Loading overlay for form submission -->
         <div id="add-task-loading-overlay" class="add-task-loading-overlay" style="display: none;">
@@ -144,10 +145,13 @@
             </div>
             <div class="form-group">
                 <label for="task-who-can-help">Who Can Help</label>
-                <select id="task-who-can-help" name="whoCanHelp">
-                    <option value="">Select helper...</option>
-                    <option value="Other">Other</option>
-                </select>
+                <div id="who-can-help-container">
+                    <select class="who-can-help-select" name="whoCanHelp">
+                        <option value="">Select helper...</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    <!-- Additional dropdowns will be added dynamically when a value is selected -->
+                    </div>
             </div>
         </div>
         
@@ -208,8 +212,8 @@
         </div>
         
         <div class="form-actions">
-            <button type="button" class="btn-secondary" onclick="todoApp.hideAddTaskForm()">Cancel</button>
-            <button type="submit" class="btn-primary">Add Task</button>
+            <button type="button" class="btn btn-secondary" onclick="todoApp.hideAddTaskForm()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Add Task</button>
         </div>
     </form>
     
@@ -218,7 +222,41 @@
     
     <!-- Configuration (customize this file) -->
     <script src="config.js"></script>
+    <!-- Optional local overrides (ignored in git). If present, this file should define LOCAL_CONFIG_OVERRIDES or getLocalConfig() -->
+    <script>
+        (function () {
+            const localScriptPath = 'appscript/to-do-apps-script.local.js';
+            fetch(localScriptPath, { method: 'HEAD' }).then(r => {
+                if (r.ok) {
+                    const s = document.createElement('script');
+                    s.src = localScriptPath + '?v=' + Date.now();
+                    s.onload = () => console.log('Loaded local Apps Script override');
+                    s.onerror = () => console.warn('Failed loading local Apps Script override');
+                    document.head.appendChild(s);
+                }
+            }).catch(() => { });
+        })();
+    </script>
     
+    <!-- Debug console for easier testing (only when debug enabled) -->
+    <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                if (typeof TODO_CONFIG !== 'undefined' && TODO_CONFIG.debug) {
+                    console.log('🐛 Debug mode enabled - loading debug.js');
+                    const script = document.createElement('script');
+                    script.src = 'debug.js';
+                    script.onload = function () {
+                        console.log('✅ Debug.js loaded successfully');
+                    };
+                    script.onerror = function () {
+                        console.error('❌ Failed to load debug.js');
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    console.log('ℹ️  Debug mode disabled');
+                }
+        });
+    </script>
     <!-- Core todo app -->
     <script src="app.js"></script>
     
@@ -241,40 +279,71 @@
             }
             
             // Function to set up dynamic links
-            function setupDynamicLinks() {
-                const config = window.TODO_CONFIG;
+            function setupDynamicLinks(configParam = null) {
+                const config = configParam || window.TODO_CONFIG;
+
+                // Safety check - ensure config exists
+                if (!config) {
+                    console.warn('TODO_CONFIG not available for setupDynamicLinks');
+                    return;
+                }
+
+                console.log('✅ Setting up dynamic links with config');
                 
                 // Set up Google Sheets link
                 const sheetsLink = document.getElementById('sheets-link');
-                if (config.googleSheets && config.googleSheets.enabled && config.googleSheets.spreadsheetId && config.googleSheets.spreadsheetId !== 'YOUR_GOOGLE_SHEETS_ID_HERE') {
+                if (sheetsLink && config.googleSheets && config.googleSheets.enabled && config.googleSheets.spreadsheetId && config.googleSheets.spreadsheetId !== 'YOUR_GOOGLE_SHEETS_ID_HERE') {
                     sheetsLink.href = `https://docs.google.com/spreadsheets/d/${config.googleSheets.spreadsheetId}/edit?usp=sharing`;
                     sheetsLink.style.display = '';
+                    console.log('✅ Google Sheets link configured');
+                } else {
+                    console.log('ℹ️  Google Sheets link not configured');
                 }
                 
                 // Set up Google Drive folder link
                 const driveFolderLink = document.getElementById('drive-folder-link');
-                if (config.data && config.data.audioFile && config.data.audioFile.options && config.data.audioFile.options.driveFolder && config.data.audioFile.options.driveFolder !== 'YOUR_GOOGLE_DRIVE_FOLDER_URL_HERE') {
+                if (driveFolderLink && config.data && config.data.audioFile && config.data.audioFile.options && config.data.audioFile.options.driveFolder && config.data.audioFile.options.driveFolder !== 'YOUR_GOOGLE_DRIVE_FOLDER_URL_HERE') {
                     driveFolderLink.href = config.data.audioFile.options.driveFolder;
                     driveFolderLink.style.display = '';
+                    console.log('✅ Google Drive folder link configured');
+                } else {
+                    console.log('ℹ️  Google Drive folder link not configured');
                 }
             }
             
-            // Set up links initially
-            setupDynamicLinks();
-            
-            // Also set up links when config is ready (in case local config loads after)
-            window.addEventListener('configReady', setupDynamicLinks);
-            
-            console.log('TODO_CONFIG:', TODO_CONFIG);
-            try {
-                window.todoApp = new GoogleSheetsChecklist(TODO_CONFIG);
-                console.log('TodoApp created:', window.todoApp);
-                todoApp.init();
-                console.log('TodoApp initialized');
-            } catch (error) {
-                console.error('Error initializing todo app:', error);
-                console.error('Error stack:', error.stack);
+            // Function to initialize the app
+            function initializeApp() {
+                console.log('� Creating TodoApp instance...');
+                console.log('⚙️  Current TODO_CONFIG:', TODO_CONFIG);
+                try {
+                    // Set up links now that we know TODO_CONFIG is available
+                    setupDynamicLinks();
+
+                    window.todoApp = new GoogleSheetsChecklist(TODO_CONFIG);
+                    console.log('✅ TodoApp created successfully:', window.todoApp);
+                    todoApp.init();
+                    console.log('🎉 TodoApp initialized successfully');
+                } catch (error) {
+                    console.error('❌ Error initializing todo app:', error);
+                    console.error('📊 Error stack:', error.stack);
+                }
             }
+
+            // Wait for config ready event before initializing the app
+            console.log('🔗 Waiting for config to be ready before initializing app...');
+            window.addEventListener('configReady', function () {
+                console.log('🔄 Config ready event received, initializing app...');
+                initializeApp();
+
+                // Also set up dynamic links with updated config
+                setTimeout(() => {
+                    if (window.TODO_CONFIG) {
+                        setupDynamicLinks(window.TODO_CONFIG);
+                    } else {
+                        console.warn('TODO_CONFIG still not available after configReady event');
+                    }
+                }, 10);
+            });
         });
     </script>
 </body>

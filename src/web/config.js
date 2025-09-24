@@ -6,11 +6,14 @@ const TODO_CONFIG = {
     projectName: "Your Project",
     projectId: "your-project-id",
     
+    // Debug mode - set to true to enable debug console and logging
+    debug: true,
+    
     // Google Sheets Integration (optional)
     // Set enabled: false to disable Google Sheets and use local storage only
     // IMPORTANT: Copy config.example.js to config.local.js and fill in your real values
     googleSheets: {
-        enabled: false, // Set to true to enable Google Sheets integration (override in config.local.js)
+        enabled: true, // Set to true to enable Google Sheets integration (override in config.local.js)
         spreadsheetId: 'YOUR_GOOGLE_SHEETS_ID_HERE', // Your Google Sheets ID (override in config.local.js)
         gid: 'YOUR_SHEET_GID_HERE', // The specific sheet tab ID (override in config.local.js)
         csvUrl: null, // Auto-constructed as: https://docs.google.com/spreadsheets/d/{spreadsheetId}/gviz/tq?tqx=out:csv&gid={gid}&headers=1
@@ -21,6 +24,9 @@ const TODO_CONFIG = {
     dataSource: {
         // If Google Sheets is disabled, uses localStorage with this key
         localStorageKey: "todoApp_tasks",
+        
+        // Enable/disable local storage (set to false to force Google Sheets only)
+        enableLocalStorage: false,
         
         // Auto-sync interval (milliseconds) - set to 0 to disable auto-sync
         syncInterval: 30000, // 30 seconds
@@ -121,7 +127,7 @@ const TODO_CONFIG = {
         },
         whoCanHelp: {
             dynamic: true,
-            type: 'select',
+            type: 'multiselect',
             location: "detail",
             icon: '🤝'
         },
@@ -369,6 +375,9 @@ const TODO_CONFIG = {
     ]
 };
 
+// Make TODO_CONFIG globally available
+window.TODO_CONFIG = TODO_CONFIG;
+
 // Example of how to customize for different projects:
 
 // For a work project:
@@ -408,42 +417,61 @@ const TODO_CONFIG = {
 };
 */
 
-// Attempt to load local configuration overrides
+// Function to load local configuration overrides
 // This allows keeping sensitive data in config.local.js (which is git-ignored)
-try {
-    // Try to dynamically import config.local.js if it exists
-    const script = document.createElement('script');
-    script.src = './config.local.js';
-    script.onload = function() {
-        if (typeof LOCAL_CONFIG_OVERRIDES !== 'undefined') {
-            // Deep merge the local config overrides
-            function deepMerge(target, source) {
-                for (const key in source) {
-                    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-                        if (!target[key]) target[key] = {};
-                        deepMerge(target[key], source[key]);
-                    } else {
-                        target[key] = source[key];
+function loadLocalConfig() {
+    try {
+        // Try to dynamically import config.local.js if it exists
+        const script = document.createElement('script');
+        script.src = './config.local.js';
+        script.onload = function() {
+            console.log('🔄 Config.local.js script loaded');
+            if (typeof LOCAL_CONFIG_OVERRIDES !== 'undefined') {
+                console.log('📋 Found LOCAL_CONFIG_OVERRIDES:', LOCAL_CONFIG_OVERRIDES);
+                
+                // Deep merge the local config overrides
+                function deepMerge(target, source) {
+                    for (const key in source) {
+                        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                            if (!target[key]) target[key] = {};
+                            deepMerge(target[key], source[key]);
+                        } else {
+                            target[key] = source[key];
+                        }
                     }
                 }
+                
+                console.log('🔧 TODO_CONFIG before merge:', JSON.parse(JSON.stringify(TODO_CONFIG)));
+                deepMerge(TODO_CONFIG, LOCAL_CONFIG_OVERRIDES);
+                console.log('✅ TODO_CONFIG after merge:', JSON.parse(JSON.stringify(TODO_CONFIG)));
+                console.log('✅ Local configuration loaded successfully');
+                
+                // Trigger a custom event to notify that config is ready
+                window.dispatchEvent(new CustomEvent('configReady'));
+            } else {
+                console.log('⚠️  LOCAL_CONFIG_OVERRIDES not found in config.local.js');
+                // Trigger the ready event even without local config overrides
+                window.dispatchEvent(new CustomEvent('configReady'));
             }
-            
-            deepMerge(TODO_CONFIG, LOCAL_CONFIG_OVERRIDES);
-            console.log('✅ Local configuration loaded successfully');
-            
-            // Trigger a custom event to notify that config is ready
+        };
+        script.onerror = function() {
+            console.log('ℹ️  No local configuration found. Using default values.');
+            console.log('💡 Copy config.example.js to config.local.js to add your Google Sheets credentials');
+            // Trigger the ready event even without local config
             window.dispatchEvent(new CustomEvent('configReady'));
-        }
-    };
-    script.onerror = function() {
-        console.log('ℹ️  No local configuration found. Using default values.');
-        console.log('💡 Copy config.example.js to config.local.js to add your Google Sheets credentials');
-        // Trigger the ready event even without local config
+        };
+        document.head.appendChild(script);
+    } catch (error) {
+        console.log('ℹ️  Local configuration not available:', error.message);
+        // Trigger the ready event even if loading fails
         window.dispatchEvent(new CustomEvent('configReady'));
-    };
-    document.head.appendChild(script);
-} catch (error) {
-    console.log('ℹ️  Local configuration not available:', error.message);
-    // Trigger the ready event even if loading fails
-    window.dispatchEvent(new CustomEvent('configReady'));
+    }
+}
+
+// Load config when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadLocalConfig);
+} else {
+    // DOM is already ready
+    loadLocalConfig();
 }

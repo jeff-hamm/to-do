@@ -135,3 +135,7 @@ out/
 *.bak
 *.backup
 *.old
+
+# Local Apps Script override (secrets)
+src/appscript/to-do-apps-script.local.js__pycache__
+__pycache__/

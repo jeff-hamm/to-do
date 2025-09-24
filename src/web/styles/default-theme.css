@@ -1,0 +1,250 @@
+/* Default Dark Theme for Universal Todo System */
+/* This file contains all theme-specific variables */
+
+:root {
+    /* === COLOR PALETTE === */
+    /* Background Colors */
+    --color-bg: #0d1117;
+    --color-bg-alt: #161b22;
+    --color-bg-secondary: #21262d;
+    --color-bg-elevated: #30363d;
+    
+    /* Text Colors */
+    --color-text: #f0f6fc;
+    --color-text-light: #e6edf3;
+    --color-text-muted: #7d8590;
+    --color-text-inverse: #24292f;
+    
+    /* Semantic Colors */
+    --color-white: #ffffff;
+    --color-black: #000000;
+    
+    /* Gray Scale */
+    --color-gray: #6e7681;
+    --color-gray-light: #8b949e;
+    --color-gray-medium: #57606a;
+    --color-gray-dark: #424a53;
+    --color-gray-darker: #32383f;
+    
+    /* Legacy gray colors for compatibility */
+    --color-gray1: #6c757d;
+    --color-gray2: #495057;
+    --color-gray3: #343a40;
+    --color-gray4: #30363d;
+    --color-gray5: #666666;
+    
+    /* Accent Colors */
+    --color-primary: #ff69b4;
+    --color-primary-light: #ffb3da;
+    --color-primary-dark: #e55aa0;
+    --color-primary-hover: var(--color-primary-dark);
+    --color-accent: var(--color-primary);
+    
+    /* Legacy color support */
+    --color-pink: var(--color-primary);
+    --color-pink-light: var(--color-primary-light);
+    
+    /* Status Colors */
+    --color-success: #28a745;
+    --color-warning: #f7931e;
+    --color-error: #da3633;
+    --color-info: #0969da;
+    
+    /* Special Colors */
+    --color-purple-dark: #3d1a33;
+    
+    /* === TYPOGRAPHY === */
+    /* Font Families */
+    --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    
+    /* Font Sizes - Responsive using clamp() to match deployed version */
+    --font-size-xs: 10px;
+    --font-size-sm: 12px;
+    --font-size-base: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+    --font-size-2xl: 20px;
+    --font-size-3xl: 24px;
+    
+    /* Responsive font sizes matching deployed version */
+    --font-size-heading-main: clamp(16px, 3.5vw, 26px);     /* Main task titles */
+    --font-size-heading-section: clamp(16px, 3vw, 24px);    /* Timeline titles, form headings */
+    --font-size-text-large: clamp(12px, 2.5vw, 18px);       /* Detail items, primary text */
+    --font-size-text-medium: clamp(10px, 2vw, 16px);        /* Task details, secondary text */
+    --font-size-text-small: clamp(8px, 1.5vw, 14px);        /* Category chips, form elements */
+    --font-size-form: 14px;                                 /* Form inputs, buttons */
+    --font-size-tiny: 12px;                                 /* Sync status, timestamps */
+    --font-size-micro-tiny: 10px;                           /* Category tags, very small text */
+    
+    /* Icon sizes */
+    --font-size-icon-large: clamp(16px, 4vw, 24px);         /* Priority corner icons */
+    --font-size-icon-medium: clamp(11px, 2vw, 17px);        /* Detail icons, priority indicators */
+    --font-size-icon-small: clamp(9px, 1.8vw, 15px);        /* Edit icons */
+    --font-size-icon-tiny: clamp(8px, 1.5vw, 12px);         /* Very small icons */
+    
+    /* Font Weights */
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    
+    /* Line Heights */
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.4;
+    --line-height-relaxed: 1.6;
+    
+    /* === SPACING === */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-2xl: 48px;
+    --spacing-3xl: 64px;
+    
+    /* === BORDERS & RADIUS === */
+    --border-width: 1px;
+    --border-width-thick: 2px;
+    
+    --border-radius-sm: 4px;
+    --border-radius: 8px;
+    --border-radius-lg: 12px;
+    --border-radius-xl: 16px;
+    --border-radius-full: 50%;
+    
+    /* Border Colors */
+    --border-color: var(--color-gray-darker);
+    --border-color-light: var(--color-gray-dark);
+    --border-color-focus: var(--color-primary);
+    --border-color-error: var(--color-error);
+    
+    /* Additional border colors from deployed version */
+    --color-border-pink: rgba(255, 105, 180, 0.3);
+    --color-border-pink-light: rgba(255, 179, 218, 0.3);
+    --color-border-gray: rgba(108, 117, 125, 0.3);
+    
+    /* === SHADOWS === */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.25);
+    
+    /* Colored Shadows */
+    --shadow-primary: 0 4px 12px rgba(255, 105, 180, 0.3);
+    --shadow-error: 0 4px 12px rgba(218, 54, 51, 0.3);
+    
+    /* === TRANSITIONS === */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+    
+    /* === Z-INDEX LEVELS === */
+    --z-dropdown: 100;
+    --z-modal-backdrop: 1000;
+    --z-modal: 1001;
+    --z-tooltip: 1100;
+    
+    /* === COMPONENT SPECIFIC === */
+    /* Form Controls */
+    --input-height: 40px;
+    --input-padding-x: var(--spacing-md);
+    --input-padding-y: var(--spacing-sm);
+    
+    /* Buttons */
+    --button-height: 40px;
+    --button-padding-x: var(--spacing-lg);
+    --button-padding-y: var(--spacing-sm);
+    
+    /* Modal */
+    --modal-max-width: 600px;
+    --modal-backdrop-opacity: 0.7;
+    
+    /* Task Items */
+    --task-item-gap: var(--spacing-md);
+    --task-item-padding: var(--spacing-md);
+    
+    /* Progress Bar */
+    --progress-height: 8px;
+    --progress-border-radius: var(--border-radius);
+
+    /* === CATEGORY COLOR TOKENS (extracted from legacy styles.css) === */
+    --category-medical: #ff69b4;
+    --category-home: #ffb3da;
+    --category-equipment: #ff69b4;
+    --category-administrative: #ff8eb3;
+    --category-transportation: #ff4da6;
+    --category-shopping: #ffcce5;
+    --category-technology: #e60073;
+    --category-supplies: #cc0066;
+    --category-personal: #ff0080;
+    --category-recovery: #ff3399;
+    --category-daily: #ff66b3;
+    --category-projects: #ff99cc;
+    --category-emergency: #ff0000;
+    --category-activity: #ff6600;
+
+    /* Editing dropdown emphasis */
+    --editing-dropdown-focus-shadow: 0 0 0 2px rgba(255, 105, 180, 0.25);
+    --editing-dropdown-focus-shadow-strong: 0 0 0 2px rgba(255, 179, 218, 0.35);
+}
+
+/* === LIGHT THEME VARIANT === */
+/* Uncomment the section below to use light theme */
+/*
+.theme-light {
+    --color-bg: #ffffff;
+    --color-bg-alt: #f6f8fa;
+    --color-bg-secondary: #f1f3f4;
+    --color-bg-elevated: #ffffff;
+    
+    --color-text: #24292f;
+    --color-text-light: #1f2328;
+    --color-text-muted: #656d76;
+    --color-text-inverse: #f0f6fc;
+    
+    --color-gray: #8b949e;
+    --color-gray-light: #afb8c1;
+    --color-gray-medium: #656d76;
+    --color-gray-dark: #d0d7de;
+    --color-gray-darker: #d8dee4;
+    
+    --color-primary: #0969da;
+    --color-primary-light: #4285f4;
+    --color-primary-dark: #0550ae;
+    
+    --color-success: #1a7f37;
+    --color-warning: #bf8700;
+    --color-error: #d1242f;
+    --color-info: #0969da;
+    
+    --color-purple-dark: #e6f7ff;
+    
+    --border-color: var(--color-gray-dark);
+    --border-color-light: var(--color-gray-light);
+    
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+*/
+
+/* === ACCESSIBILITY === */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --transition-fast: none;
+        --transition-normal: none;
+        --transition-slow: none;
+    }
+}
+
+/* === HIGH CONTRAST MODE === */
+@media (prefers-contrast: high) {
+    :root {
+        --color-primary: #ff1493;
+        --border-width: var(--border-width-thick);
+    }
+}
