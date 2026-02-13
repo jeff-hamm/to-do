@@ -86,7 +86,10 @@ function doGet(e) {
     if (requestData.action === 'getSequenceManifest' || requestData.action === 'getFirmwareManifest') {
       const config = getConfig(requestData);
       const schema = getSchema(requestData, config);
-      const manifest = getSequenceManifest(config, schema);
+      // streaming parameter: 'true' (default) for real-time streaming URLs with OAuth tokens
+      //                      'false' for direct Drive download URLs (for SD card caching)
+      const streaming = e.parameter.streaming !== 'false';
+      const manifest = getSequenceManifest(config, schema, streaming);
       // Return raw manifest JSON (not wrapped in {success, data})
       return ContentService.createTextOutput(JSON.stringify(manifest))
         .setMimeType(ContentService.MimeType.JSON);
@@ -955,14 +958,16 @@ function exportAsJSON(config, schema, keyField = null) {
  *   "dialtone": { "description": "Dial Tone", "type": "audio", "path": "https://..." }
  * }
  * 
- * For Drive files, returns authenticated streaming URLs that ESP32 can use directly
+ * Parameters:
+ * - streaming: If true, returns authenticated API URLs for real-time streaming
+ *              If false, returns direct Drive download URLs (for SD card caching)
  */
-function getSequenceManifest(config, schema = null) {
+function getSequenceManifest(config, schema = null, streaming = true) {
   const result = getData(config, schema);
   const manifest = {};
   
-  // Get OAuth token for authenticated Drive URLs
-  const accessToken = ScriptApp.getOAuthToken();
+  // Get OAuth token for authenticated Drive URLs (only needed for streaming mode)
+  const accessToken = streaming ? ScriptApp.getOAuthToken() : null;
   
   result.rows.forEach(row => {
     // Get the number/key - try common field names
@@ -978,9 +983,9 @@ function getSequenceManifest(config, schema = null) {
     // Determine type
     let type = row.type || row.Type || 'audio';
     
-    // Convert Drive URLs to streamable authenticated URLs
+    // Convert Drive URLs based on streaming mode
     if (path) {
-      path = convertToStreamableUrl(path, accessToken);
+      path = convertToStreamableUrl(path, accessToken, streaming);
     }
     
     manifest[key.toString()] = {
@@ -994,13 +999,20 @@ function getSequenceManifest(config, schema = null) {
 }
 
 /**
- * Convert various URL formats to streamable URLs
+ * Convert various URL formats to appropriate download/streaming URLs
+ * 
+ * Parameters:
+ * - url: The original URL (Drive link, file ID, or external URL)
+ * - accessToken: OAuth token (only used when streaming=true)
+ * - streaming: If true, returns authenticated API URL for real-time streaming
+ *              If false, returns direct download URL for caching to SD card
+ * 
  * Handles:
- * - Google Drive viewer URLs -> authenticated API URLs
- * - Google Drive file IDs -> authenticated API URLs  
+ * - Google Drive viewer URLs -> API or direct URLs
+ * - Google Drive file IDs -> API or direct URLs  
  * - Already-direct URLs -> pass through unchanged
  */
-function convertToStreamableUrl(url, accessToken) {
+function convertToStreamableUrl(url, accessToken, streaming = true) {
   if (!url) return '';
   
   url = url.toString().trim();
@@ -1031,12 +1043,17 @@ function convertToStreamableUrl(url, accessToken) {
     fileId = url;
   }
   
-  // If we found a Drive file ID, return authenticated API URL
+  // If we found a Drive file ID, return the public download URL
+  // IMPORTANT: Files must be shared publicly ("Anyone with the link can view")
+  // The googleapis.com URLs with OAuth tokens get blocked by Google's bot detection
+  // when ESP32 requests them directly, so we use the public download URL instead
   if (fileId) {
-    return `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&access_token=${accessToken}`;
+    // Use export=download URL - works for publicly shared files
+    // This URL follows redirects but eventually serves the file content
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
   }
   
-  // Otherwise return URL as-is (might be an external URL)
+  // Otherwise return URL as-is (might be an external URL like GitHub)
   return url;
 }
 
