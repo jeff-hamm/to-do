@@ -86,8 +86,10 @@ function doGet(e) {
     if (requestData.action === 'getSequenceManifest' || requestData.action === 'getFirmwareManifest') {
       const config = getConfig(requestData);
       const schema = getSchema(requestData, config);
-      // streaming parameter: 'true' (default) for real-time streaming URLs with OAuth tokens
-      //                      'false' for direct Drive download URLs (for SD card caching)
+      // streaming parameter:
+      //   'true'  (default) -> authenticated googleapis.com URLs (works from browsers)
+      //   'false' -> public Drive download URLs (required for ESP32 — Google blocks
+      //             authenticated API URLs from non-browser user agents)
       const streaming = e.parameter.streaming !== 'false';
       const manifest = getSequenceManifest(config, schema, streaming);
       // Return raw manifest JSON (not wrapped in {success, data})
@@ -958,9 +960,17 @@ function exportAsJSON(config, schema, keyField = null) {
  *   "dialtone": { "description": "Dial Tone", "type": "audio", "path": "https://..." }
  * }
  * 
- * Parameters:
- * - streaming: If true, returns authenticated API URLs for real-time streaming
- *              If false, returns direct Drive download URLs (for SD card caching)
+ * URL mode controlled by streaming parameter:
+ *   streaming=true  -> authenticated googleapis.com URLs (for browser clients)
+ *   streaming=false -> public Drive download URLs (for ESP32 / non-browser clients)
+ * 
+ * NOTE: ESP32 must use streaming=false because Google's bot detection blocks
+ * authenticated API URLs from non-browser user agents.
+ * Files used with streaming=false must be shared as "Anyone with the link can view".
+ * 
+ * @param {Object} config - Configuration with sheetId, gid, etc.
+ * @param {Object} schema - Optional schema for type coercion
+ * @param {boolean} streaming - true for authenticated URLs (browsers), false for public URLs (ESP32)
  */
 function getSequenceManifest(config, schema = null, streaming = true) {
   const result = getData(config, schema);
@@ -983,34 +993,112 @@ function getSequenceManifest(config, schema = null, streaming = true) {
     // Determine type
     let type = row.type || row.Type || 'audio';
     
+    // Extract file ID and get file extension from Drive metadata
+    let ext = '';
+    const fileId = extractDriveFileId(path);
+    if (fileId) {
+      ext = getDriveFileExtension(fileId);
+    }
+    
     // Convert Drive URLs based on streaming mode
     if (path) {
       path = convertToStreamableUrl(path, accessToken, streaming);
     }
     
-    manifest[key.toString()] = {
+    const entry = {
       description: description.toString(),
       type: type.toString(),
       path: path.toString()
     };
+    
+    // Only include ext if we found one
+    if (ext) {
+      entry.ext = ext;
+    }
+    
+    manifest[key.toString()] = entry;
   });
   
   return manifest;
 }
 
 /**
- * Convert various URL formats to appropriate download/streaming URLs
- * 
- * Parameters:
- * - url: The original URL (Drive link, file ID, or external URL)
- * - accessToken: OAuth token (only used when streaming=true)
- * - streaming: If true, returns authenticated API URL for real-time streaming
- *              If false, returns direct download URL for caching to SD card
- * 
+ * Extract Drive file ID from various URL formats
+ */
+function extractDriveFileId(url) {
+  if (!url) return null;
+  url = url.toString().trim();
+  
+  // Format: https://drive.google.com/file/d/FILE_ID/view...
+  let match = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  
+  // Format: https://drive.google.com/open?id=FILE_ID
+  match = url.match(/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  
+  // Format: https://drive.google.com/uc?id=FILE_ID
+  match = url.match(/drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  
+  // Format: Just a file ID (no URL)
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(url)) return url;
+  
+  return null;
+}
+
+/**
+ * Get file extension from Drive file metadata
+ * Uses MIME type to determine appropriate extension
+ */
+function getDriveFileExtension(fileId) {
+  try {
+    const file = DriveApp.getFileById(fileId);
+    const mimeType = file.getMimeType();
+    const fileName = file.getName();
+    
+    // First try to get extension from filename
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex > 0) {
+      return fileName.substring(dotIndex + 1).toLowerCase();
+    }
+    
+    // Fall back to MIME type mapping
+    const mimeToExt = {
+      'audio/wav': 'wav',
+      'audio/x-wav': 'wav',
+      'audio/wave': 'wav',
+      'audio/mpeg': 'mp3',
+      'audio/mp3': 'mp3',
+      'audio/ogg': 'ogg',
+      'audio/flac': 'flac',
+      'audio/aac': 'aac',
+      'audio/mp4': 'm4a',
+      'audio/x-m4a': 'm4a',
+      'video/mp4': 'mp4',
+      'application/octet-stream': '' // Unknown binary
+    };
+    
+    return mimeToExt[mimeType] || '';
+  } catch (e) {
+    console.log('Error getting file extension for ' + fileId + ': ' + e);
+    return '';
+  }
+}
+
+/**
+ * Convert various URL formats to download/streaming URLs
  * Handles:
- * - Google Drive viewer URLs -> API or direct URLs
- * - Google Drive file IDs -> API or direct URLs  
+ * - Google Drive viewer URLs -> API or direct download URLs
+ * - Google Drive file IDs -> API or direct download URLs
  * - Already-direct URLs -> pass through unchanged
+ * 
+ * @param {string} url - The original URL or file ID
+ * @param {string} accessToken - OAuth token (used when streaming=true)
+ * @param {boolean} streaming - true: authenticated API URL (browsers only);
+ *                              false: public download URL (works everywhere,
+ *                              required for ESP32 — Google blocks API URLs from
+ *                              non-browser user agents)
  */
 function convertToStreamableUrl(url, accessToken, streaming = true) {
   if (!url) return '';
@@ -1043,17 +1131,17 @@ function convertToStreamableUrl(url, accessToken, streaming = true) {
     fileId = url;
   }
   
-  // If we found a Drive file ID, return the public download URL
-  // IMPORTANT: Files must be shared publicly ("Anyone with the link can view")
-  // The googleapis.com URLs with OAuth tokens get blocked by Google's bot detection
-  // when ESP32 requests them directly, so we use the public download URL instead
   if (fileId) {
-    // Use export=download URL - works for publicly shared files
-    // This URL follows redirects but eventually serves the file content
+    if (streaming && accessToken) {
+      // Authenticated API URL — works from browsers but NOT from ESP32
+      // (Google's bot detection blocks non-browser user agents)
+      return `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&access_token=${accessToken}`;
+    }
+    // Public download URL — works everywhere; file must be shared publicly
     return `https://drive.google.com/uc?export=download&id=${fileId}`;
   }
   
-  // Otherwise return URL as-is (might be an external URL like GitHub)
+  // Otherwise return URL as-is (might be an external URL)
   return url;
 }
 
